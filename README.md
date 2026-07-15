@@ -1,45 +1,45 @@
-# 华为云业务上云 Agent Skill
+# Huawei Cloud Deployment Agent Skill
 
-一个面向所有 AI 平台的华为云完整部署技能文件，让任何 AI Agent 通过自然语言完成从基础网络到数据库的全链路云上部署。
+A complete Huawei Cloud deployment skill file for all AI platforms, enabling any AI Agent to handle full-stack cloud deployments — from basic networking to databases — using natural language.
 
-## 覆盖功能
+## Features Covered
 
-| 模块 | 操作 |
-|------|------|
-| **安全组** | 创建、添加入/出方向规则、常用端口速查、安全组互通 |
-| **ECS 云服务器** | 创建、批量启停、查询状态、job 轮询、规格速查 |
-| **EIP 弹性公网 IP** | 申请独享 EIP、绑定到 ECS/ELB、解绑 |
-| **共享带宽包** | 创建共享带宽、加入/移出 EIP |
-| **OBS 对象存储** | 创建 Bucket、AK/SK 签名上传、obsutil CLI 推荐用法 |
-| **ECS ↔ RDS 连接** | 安全组打通、内网连接字符串（MySQL/PG/JDBC） |
-| **ELB 负载均衡** | 创建 LB → 监听器 → 后端服务器组 → 添加节点 → 健康检查 → 绑 EIP |
-| **RDS 数据库** | 创建主备实例、备份恢复、账号管理、慢日志、参数配置 |
-| **端到端场景** | 3节点 Web 应用 + MySQL 从零到上线完整脚本 |
+| Module | Operations |
+|--------|------------|
+| **Security Groups** | Create, add inbound/outbound rules, common port reference, security group interconnection |
+| **ECS Cloud Servers** | Create, bulk start/stop, query status, job polling, flavor reference |
+| **EIP Elastic Public IP** | Apply for dedicated EIP, bind to ECS/ELB, unbind |
+| **Shared Bandwidth Package** | Create shared bandwidth, add/remove EIPs |
+| **OBS Object Storage** | Create Bucket, AK/SK signed upload, obsutil CLI recommended usage |
+| **ECS ↔ RDS Connection** | Security group setup, private network connection strings (MySQL/PG/JDBC) |
+| **ELB Load Balancer** | Create LB → Listener → Backend Server Group → Add nodes → Health check → Bind EIP |
+| **RDS Database** | Create primary/standby instances, backup & restore, account management, slow logs, parameter configuration |
+| **End-to-End Scenario** | Complete script for a 3-node Web app + MySQL from scratch to production |
 
-支持华为云区域：`cn-north-4`、`cn-east-3`、`cn-south-1` 等所有商业区域  
-API 版本：ECS v1、VPC v2.0、ELB v3、RDS v3、OBS v1
+Supported Huawei Cloud regions: `cn-north-4`, `cn-east-3`, `cn-south-1`, and all other commercial regions  
+API versions: ECS v1, VPC v2.0, ELB v3, RDS v3, OBS v1
 
-## 支持的 AI 平台
+## Supported AI Platforms
 
-| 平台 | 使用方式 |
-|------|---------|
-| **Claude Projects** | 将 `SKILL.md` 内容粘贴到 Project Instructions |
-| **Cursor** | 保存为 `.cursor/rules/huaweicloud-deploy.mdc` |
-| **GitHub Copilot** | 保存为 `.github/copilot-instructions.md` |
-| **ChatGPT / Custom GPT** | 粘贴到 System Prompt 或 Instructions |
-| **Dify / FastGPT / Coze** | 作为系统提示词或知识库文档导入 |
-| **Hermes Agent** | 放入 `~/.hermes/skills/devops/huaweicloud-deploy/SKILL.md` |
-| **任意平台** | 将 `SKILL.md` 全文粘贴为 System Prompt 即可 |
+| Platform | Usage |
+|----------|-------|
+| **Claude Projects** | Paste the contents of `SKILL.md` into Project Instructions |
+| **Cursor** | Save as `.cursor/rules/huaweicloud-deploy.mdc` |
+| **GitHub Copilot** | Save as `.github/copilot-instructions.md` |
+| **ChatGPT / Custom GPT** | Paste into System Prompt or Instructions |
+| **Dify / FastGPT / Coze** | Import as system prompt or knowledge base document |
+| **Hermes Agent** | Place at `~/.hermes/skills/devops/huaweicloud-deploy/SKILL.md` |
+| **Any Platform** | Paste the full `SKILL.md` content as the System Prompt |
 
-## 快速使用
+## Quick Start
 
 ### Claude Projects
 
-1. 打开 [Claude Projects](https://claude.ai/projects)
-2. 进入项目设置 → Instructions
-3. 复制 `SKILL.md` 全文粘贴进去
-4. 对话示例：
-   > "帮我在 cn-north-4 部署 3 节点 Web 应用，4核8G，接 MySQL 主备"
+1. Open [Claude Projects](https://claude.ai/projects)
+2. Go to project settings → Instructions
+3. Copy the full contents of `SKILL.md` and paste it in
+4. Example prompt:
+   > "Deploy a 3-node web app in cn-north-4 with 4 vCPU / 8 GB, connected to a MySQL primary/standby setup"
 
 ### Cursor
 
@@ -55,39 +55,39 @@ curl -o .cursor/rules/huaweicloud-deploy.mdc \
 mkdir -p ~/.hermes/skills/devops/huaweicloud-deploy
 curl -o ~/.hermes/skills/devops/huaweicloud-deploy/SKILL.md \
   https://raw.githubusercontent.com/seagaruda/huaweicloud-rds-skill/main/SKILL.md
-# 可选：同步 RDS API 参考
+# Optional: sync RDS API reference
 mkdir -p ~/.hermes/skills/devops/huaweicloud-deploy/references
 curl -o ~/.hermes/skills/devops/huaweicloud-deploy/references/rds-api.md \
   https://raw.githubusercontent.com/seagaruda/huaweicloud-rds-skill/main/references/rds-api.md
 ```
 
-## 对话示例
+## Conversation Examples
 
 ```
-用户：帮我创建一个安全组，开放 80、443、22 端口
-用户：建 3 台 4核8G 的 ECS，镜像用 Ubuntu 22.04
-用户：申请一个公网 IP 绑到 ELB 上
-用户：帮我配一下 ECS 到 RDS 的连接，安全组怎么打通？
-用户：创建一个 ELB，把这 3 台 ECS 加进去，健康检查路径是 /health
-用户：创建 MySQL 8.0 主备实例，100G SSD，和 ECS 在同一个 VPC
-用户：把生产库恢复到今天上午 10 点
-用户：帮我查一下慢 SQL，最近查询变慢了
-用户：从零开始部署一个 3 节点 Web 应用加 MySQL，给我完整脚本
+User: Create a security group and open ports 80, 443, and 22
+User: Spin up 3 ECS instances with 4 vCPU / 8 GB, using the Ubuntu 22.04 image
+User: Apply for a public IP and bind it to the ELB
+User: Help me configure the connection from ECS to RDS — how do I set up the security group?
+User: Create an ELB, add these 3 ECS instances to it, health check path is /health
+User: Create a MySQL 8.0 primary/standby instance with 100 GB SSD, in the same VPC as the ECS
+User: Restore the production database to 10:00 AM this morning
+User: Check my slow SQL queries — recent queries have been running slow
+User: Deploy a 3-node web app with MySQL from scratch and give me the complete script
 ```
 
-## 文件结构
+## File Structure
 
 ```
 huaweicloud-rds-skill/
-├── SKILL.md                  # 主技能文档（直接用于 AI 提示词）
+├── SKILL.md                  # Main skill document (used directly as AI prompt)
 └── references/
-    └── rds-api.md            # RDS v3 API 快速参考表
+    └── rds-api.md            # RDS v3 API quick reference table
 ```
 
-## 官方文档
+## Official Documentation
 
-- [ECS API 参考](https://support.huaweicloud.com/api-ecs/zh-cn_topic_0020212668.html)
-- [VPC/安全组 API 参考](https://support.huaweicloud.com/api-vpc/vpc_sg01_0001.html)
-- [ELB API 参考](https://support.huaweicloud.com/api-elb/elb_jd_0001.html)
-- [RDS API 参考](https://support.huaweicloud.com/api-rds/rds_01_0001.html)
-- [OBS API 参考](https://support.huaweicloud.com/api-obs/obs_04_0001.html)
+- [ECS API Reference](https://support.huaweicloud.com/api-ecs/zh-cn_topic_0020212668.html)
+- [VPC / Security Group API Reference](https://support.huaweicloud.com/api-vpc/vpc_sg01_0001.html)
+- [ELB API Reference](https://support.huaweicloud.com/api-elb/elb_jd_0001.html)
+- [RDS API Reference](https://support.huaweicloud.com/api-rds/rds_01_0001.html)
+- [OBS API Reference](https://support.huaweicloud.com/api-obs/obs_04_0001.html)
