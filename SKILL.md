@@ -23,6 +23,30 @@ See `references/rds-api.md` for detailed API reference.
 - User says "upload image to OBS", "how does ECS connect to RDS"
 - Not applicable for: GaussDB, DCS, DDS and other database products; K8s/CCE container deployments
 
+## Security Best Practices
+
+> **⚠️ IMPORTANT**: All examples use placeholder variables. Never hardcode real credentials.
+
+| Credential | How to Handle |
+|-----------|---------------|
+| `TOKEN` (IAM) | Store in env var `export TOKEN=...`; valid 24h, rotate regularly |
+| `PASSWORD` / `DB_ADMIN_PASS` | Use a secrets manager (e.g., Huawei Cloud CSS); never commit to Git |
+| `AK` / `SK` (OBS) | Store in env vars; restrict IAM user permissions to minimum required |
+| `DB_USER_PASS` | Generate strong passwords; rotate periodically |
+
+**Before running any script:**
+```bash
+# Export credentials as environment variables (example)
+export TOKEN="your-iam-token"
+export REGION="cn-north-4"
+export PROJECT_ID="your-project-id"
+export PASSWORD="your-ecs-password"
+export DB_ADMIN_PASS="your-rds-admin-password"
+export DB_USER_PASS="your-app-db-password"
+export AK="your-access-key"
+export SK="your-secret-key"
+```
+
 ## Prerequisite Variables
 
 | Variable | Description | Endpoint Derivation |
@@ -92,9 +116,10 @@ curl -s -X POST https://ecs.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/cloudserv
       "availability_zone": "{AZ}", "vpcid": "{VPC_ID}",
       "nics": [{"subnet_id": "{SUBNET_ID}"}],
       "security_groups": [{"id": "{SG_ID}"}],
-      "root_volume": {"volumetype": "SSD", "size": 50},
-      "adminPass": "{PASSWORD}"
-    }
+        "root_volume": {"volumetype": "SSD", "size": 50},
+        "adminPass": "${PASSWORD}"
+        # ⚠️ SECURITY: Set PASSWORD env var before running. Never hardcode.
+      }
   }'
 # Returns job_id — poll GET /v1/{PROJECT_ID}/jobs/{JOB_ID} until status=SUCCESS
 
@@ -300,7 +325,10 @@ curl -s -X POST https://rds.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/instances
   -d '{
     "name": "rds-prod", "datastore": {"type": "MySQL", "version": "8.0"},
     "ha": {"mode": "Ha", "replication_mode": "semisync"},
-    "password": "{ADMIN_PASSWORD}", "flavor_ref": "rds.mysql.c2.large.ha",
+    "password": "{ADMIN_PASSWORD}",
+    # ⚠️ SECURITY: Replace {ADMIN_PASSWORD} with a strong password from your secrets manager.
+    # Never commit real passwords to version control.
+    "flavor_ref": "rds.mysql.c2.large.ha",
     "volume": {"type": "ULTRAHIGH", "size": 100},
     "region": "{REGION}", "availability_zone": "{AZ1},{AZ2}",
     "vpc_id": "{VPC_ID}", "subnet_id": "{SUBNET_ID}",
@@ -418,6 +446,7 @@ RDS_JOB=$(curl -s -X POST https://rds.${REGION}.myhuaweicloud.com/v3/${PROJECT_I
     \"datastore\": {\"type\": \"MySQL\", \"version\": \"8.0\"},
     \"ha\": {\"mode\": \"Ha\", \"replication_mode\": \"semisync\"},
     \"password\": \"${DB_ADMIN_PASS}\",
+    # ⚠️ SECURITY: Set DB_ADMIN_PASS env var. Use a secrets manager in production.
     \"flavor_ref\": \"rds.mysql.c2.large.ha\",
     \"volume\": {\"type\": \"ULTRAHIGH\", \"size\": 100},
     \"region\": \"${REGION}\",
@@ -440,7 +469,8 @@ done
 curl -s -X POST https://rds.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/instances/${RDS_JOB}/db_user \
   -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
   -d "{\"name\":\"appuser\",\"password\":\"${DB_USER_PASS}\",
-       \"databases\":[{\"name\":\"appdb\",\"readonly\":false}]}"
+        # ⚠️ SECURITY: Set DB_USER_PASS env var. Never hardcode database passwords.
+        \"databases\":[{\"name\":\"appdb\",\"readonly\":false}]}"
 ```
 
 ### Phase 5: ELB Configuration (Full Flow)
@@ -500,6 +530,7 @@ curl -s -X PUT https://vpc.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/publicip
 ssh root@${ECS_IP_01} << 'EOF'
 # Download application package from OBS
 ./obsutil cp obs://my-bucket/releases/app-v1.0.tar.gz /opt/app/ -i=${AK} -k=${SK}
+# ⚠️ SECURITY: Set AK and SK env vars. Never hardcode access keys.
 
 # Extract and deploy
 tar -xzf /opt/app/app-v1.0.tar.gz -C /opt/app/
@@ -509,6 +540,7 @@ DB_PORT=3306
 DB_NAME=appdb
 DB_USER=appuser
 DB_PASS=${DB_USER_PASS}
+# ⚠️ SECURITY: Set DB_USER_PASS env var. Never hardcode credentials in config files.
 APP_PORT=8080
 CONF
 
@@ -532,27 +564,18 @@ curl -I http://${EIP_ADDRESS}/health
 
 # 3. Verify RDS connectivity (run on any ECS)
 mysql -h ${RDS_PRIVATE_IP} -P 3306 -u appuser -p${DB_USER_PASS} appdb -e "SELECT 1;"
+# ⚠️ SECURITY: Use environment variables for all credentials. Never hardcode passwords.
 ```
 
 ---
 
 ## GitHub Repository
 
-The public version of this skill is hosted at: https://github.com/seagaruda/huaweicloud-rds-skill  
-(`SKILL.md` main document + `references/rds-api.md` RDS API quick reference)
+This skill is hosted at: **https://github.com/seagaruda/Huawei-Cloud-Deployment-Agent-Skill**
 
----
-
-## Canonical Source
-
-This skill is also published as a GitHub repository for use across AI platforms:
-**https://github.com/seagaruda/huaweicloud-rds-skill**
-
-Files in the repo mirror this skill:
+Files in the repo:
 - `SKILL.md` — main skill body (English)
 - `references/rds-api.md` — RDS v3 API quick reference
-
-When updating the skill, push changes to that repo as well.
 
 ## Common Pitfalls
 
@@ -580,7 +603,7 @@ When updating the skill, push changes to that repo as well.
    git rebase --abort
    git fetch origin main
    git merge -X ours origin/main --no-edit
-   GH_CONFIG_DIR=/home/zhp/.config/gh git push origin main
+    GH_CONFIG_DIR=${HOME}/.config/gh git push origin main
    ```
 
 ## Verification Checklist
