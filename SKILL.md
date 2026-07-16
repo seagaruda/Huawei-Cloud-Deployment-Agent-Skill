@@ -1,20 +1,6 @@
-
 # Huawei Cloud Deployment Skill
 
-## Overview
-
-Helps deploy monolithic or distributed applications to Huawei Cloud, covering the complete infrastructure chain:
-
-- **Security Groups**: Create, add rules, common port reference
-- **ECS**: Create cloud servers, batch start/stop, query status
-- **EIP**: Apply for Elastic Public IP, bind to ECS or ELB, join shared bandwidth package
-- **Shared Bandwidth**: Create shared traffic packages, add/remove EIPs
-- **OBS**: Create buckets, upload private images or artifacts (AK/SK signing)
-- **ECS to RDS**: Security group setup + connection string configuration
-- **ELB**: Create load balancers, listeners, backend server groups, add ECS nodes, health checks
-- **RDS**: Create instances, backup and restore, account management, slow logs, parameter configuration
-
-See `references/rds-api.md` for detailed API reference.
+Helps deploy monolithic or distributed applications to Huawei Cloud, covering the complete infrastructure chain.
 
 ## When to Use
 
@@ -29,14 +15,13 @@ See `references/rds-api.md` for detailed API reference.
 
 | Credential | How to Handle |
 |-----------|---------------|
-| `TOKEN` (IAM) | Store in env var `export TOKEN=...`; valid 24h, rotate regularly |
+| `TOKEN` (IAM) | Store in env var; valid 24h, rotate regularly |
 | `PASSWORD` / `DB_ADMIN_PASS` | Use a secrets manager (e.g., Huawei Cloud CSS); never commit to Git |
 | `AK` / `SK` (OBS) | Store in env vars; restrict IAM user permissions to minimum required |
 | `DB_USER_PASS` | Generate strong passwords; rotate periodically |
 
 **Before running any script:**
 ```bash
-# Export credentials as environment variables (example)
 export TOKEN="your-iam-token"
 export REGION="cn-north-4"
 export PROJECT_ID="your-project-id"
@@ -78,533 +63,43 @@ Distributed:  Internet → EIP → ELB → ECS-1 ┐
 
 ---
 
-## 1. Security Groups
+## Module Index
 
-```bash
-# Create security group
-curl -s -X POST https://vpc.{REGION}.myhuaweicloud.com/v2.0/security-groups \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"security_group": {"name": "sg-web-app", "description": "Web application security group"}}'
+Each module is a standalone file. Load the relevant module(s) based on user intent.
 
-# Add inbound rule (open HTTP port 80)
-curl -s -X POST https://vpc.{REGION}.myhuaweicloud.com/v2.0/security-group-rules \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "security_group_rule": {
-      "security_group_id": "{SG_ID}", "direction": "ingress",
-      "protocol": "tcp", "port_range_min": 80, "port_range_max": 80,
-      "remote_ip_prefix": "0.0.0.0/0"
-    }
-  }'
-```
+| # | Module | File | Description |
+|---|--------|------|-------------|
+| 1 | Security Groups | [`modules/01-security-groups.md`](modules/01-security-groups.md) | Create SGs, add rules, port reference, SG mutual access |
+| 2 | ECS Cloud Servers | [`modules/02-ecs.md`](modules/02-ecs.md) | Create instances, batch start/stop, job polling, flavors |
+| 3 | EIP | [`modules/03-eip.md`](modules/03-eip.md) | Apply EIP, bind to ECS/ELB, unbind |
+| 4 | Shared Bandwidth | [`modules/04-bandwidth.md`](modules/04-bandwidth.md) | Create shared bandwidth, add/remove EIPs |
+| 5 | OBS | [`modules/05-obs.md`](modules/05-obs.md) | Create buckets, AK/SK upload, obsutil CLI |
+| 6 | ECS ↔ RDS | [`modules/06-ecs-rds.md`](modules/06-ecs-rds.md) | Security group setup, connection strings |
+| 7 | ELB | [`modules/07-elb.md`](modules/07-elb.md) | LB → Listener → Pool → Members → Health check → Bind EIP |
+| 8 | RDS | [`modules/08-rds.md`](modules/08-rds.md) | Create instances, backup/restore, accounts, slow logs, parameters |
+| 9 | End-to-End | [`modules/09-end-to-end.md`](modules/09-end-to-end.md) | Complete 3-node Web app + MySQL deployment script |
 
-**Common port reference:** HTTP:80, HTTPS:443, SSH:22, RDP:3389, MySQL:3306, PG:5432, Custom:8080/8443
-
-ECS to RDS: `direction=ingress`, `remote_group_id={ECS_SG_ID}` (security group mutual access is more secure than CIDR)
+See `references/rds-api.md` for the RDS v3 API quick reference table.
 
 ---
-
-## 2. ECS Cloud Servers
-
-```bash
-# Create ECS instance
-curl -s -X POST https://ecs.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/cloudservers \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "server": {
-      "name": "app-server-01", "imageRef": "{IMAGE_ID}", "flavorRef": "c3.xlarge.2",
-      "availability_zone": "{AZ}", "vpcid": "{VPC_ID}",
-      "nics": [{"subnet_id": "{SUBNET_ID}"}],
-      "security_groups": [{"id": "{SG_ID}"}],
-        "root_volume": {"volumetype": "SSD", "size": 50},
-        "adminPass": "${PASSWORD}"
-        # ⚠️ SECURITY: Set PASSWORD env var before running. Never hardcode.
-      }
-  }'
-# Returns job_id — poll GET /v1/{PROJECT_ID}/jobs/{JOB_ID} until status=SUCCESS
-
-# Batch start / stop / reboot
-curl -s -X POST https://ecs.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/cloudservers/action \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"os-start": {"servers": [{"id": "{SERVER_ID}"}]}}'
-# os-stop: {"type":"SOFT","servers":[...]}, reboot: {"type":"SOFT","servers":[...]}
-
-# Query list
-curl -s "https://ecs.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/cloudservers/detail?limit=20&offset=1" \
-  -H "X-Auth-Token: {TOKEN}"
-```
-
-Status: `ACTIVE` Running / `SHUTOFF` Stopped / `BUILD` Creating / `ERROR` Abnormal
-
-Flavor naming: `s6.large.2`=2C4G General, `c3.xlarge.2`=4C8G Compute, `m3.xlarge.8`=4C32G Memory
-
----
-
-## 3. Elastic Public IP (EIP)
-
-```bash
-# Apply for dedicated EIP (billed by bandwidth, 5 Mbps)
-curl -s -X POST https://vpc.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/publicips \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "publicip": {"type": "5_bgp"},
-    "bandwidth": {"name": "bw-app", "size": 5, "share_type": "PER", "charge_mode": "bandwidth"}
-  }'
-# Returns publicip.id and public_ip_address
-
-# Bind EIP to ECS NIC port
-curl -s -X POST \
-  https://vpc.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/publicips/{EIP_ID}/action \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"publicip": {"port_id": "{PORT_ID}"}}'
-# PORT_ID = ECS NIC port — from the addresses field in ECS details
-
-# Unbind EIP
-curl -s -X POST \
-  https://vpc.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/publicips/{EIP_ID}/action \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"publicip": {"port_id": null}}'
-```
-
----
-
-## 4. Shared Bandwidth Package
-
-```bash
-# Create shared bandwidth
-curl -s -X POST https://vpc.{REGION}.myhuaweicloud.com/v2.0/{PROJECT_ID}/bandwidths \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"bandwidth": {"name": "shared-bw-prod", "size": 50}}'
-# Returns bandwidth.id
-
-# Add EIP to shared bandwidth
-curl -s -X POST \
-  https://vpc.{REGION}.myhuaweicloud.com/v2.0/{PROJECT_ID}/bandwidths/{BW_ID}/insert \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"bandwidth": {"publicip_info": [{"publicip_id": "{EIP_ID}", "publicip_type": "5_bgp"}]}}'
-
-# Remove EIP from shared bandwidth (must specify new dedicated bandwidth size after removal)
-curl -s -X POST \
-  https://vpc.{REGION}.myhuaweicloud.com/v2.0/{PROJECT_ID}/bandwidths/{BW_ID}/remove \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"bandwidth": {"publicip_info": [{"publicip_id": "{EIP_ID}", "publicip_type": "5_bgp"}], "size": 5, "charge_mode": "bandwidth"}}'
-```
-
----
-
-## 5. OBS — Upload Images and Artifacts
-
-OBS uses AK/SK signing, not IAM Token. Create an access key (AK/SK) in the console first.
-
-```bash
-# Create Bucket (first time only)
-curl -s -X PUT https://{BUCKET_NAME}.obs.{REGION}.myhuaweicloud.com \
-  -H "Authorization: OBS {AK}:{SIGNATURE}" \
-  -H "Date: {GMT_DATE}" \
-  -H "x-obs-acl: private"
-
-# Upload file (PUT Object)
-curl -s -X PUT \
-  https://{BUCKET_NAME}.obs.{REGION}.myhuaweicloud.com/{OBJECT_KEY} \
-  -H "Authorization: OBS {AK}:{SIGNATURE}" \
-  -H "Date: {GMT_DATE}" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @/path/to/your/image.tar.gz
-```
-
-**Recommended**: Use the official Huawei Cloud `obsutil` CLI to avoid manually computing signatures:
-```bash
-# Install obsutil
-wget https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/linux_amd64/obsutil_linux_amd64.tar.gz
-tar -xzf obsutil_linux_amd64.tar.gz && chmod +x obsutil
-
-# Configure AK/SK
-./obsutil config -i={AK} -k={SK} -e=obs.{REGION}.myhuaweicloud.com
-
-# Upload
-./obsutil cp /local/image.tar.gz obs://{BUCKET_NAME}/images/image.tar.gz
-```
-
----
-
-## 6. ECS to RDS Connectivity
-
-1. **Security group setup**: Add an inbound rule to the RDS security group with `remote_group_id` set to the ECS security group ID, port = database port (MySQL:3306, PG:5432).
-2. **Get RDS private IP**: From the `private_ips` field in the RDS instance details; reachable within the same VPC only.
-3. **Connection strings**:
-   - MySQL: `mysql -h {RDS_PRIVATE_IP} -P 3306 -u {DB_USER} -p {DB_NAME}`
-   - PG: `psql -h {RDS_PRIVATE_IP} -p 5432 -U {DB_USER} -d {DB_NAME}`
-   - App config: `jdbc:mysql://{RDS_PRIVATE_IP}:3306/{DB_NAME}?useSSL=true`
-
-**Note**: ECS and RDS must be in the same VPC; cross-VPC access requires a VPC peering connection.
-
----
-
-## 7. ELB Load Balancing (Multi-node)
-
-Full steps: Create LB - Listener - Backend Server Group - Add ECS members - Health Check - Bind EIP
-
-```bash
-# Step 1: Create load balancer
-curl -s -X POST https://elb.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/elb/loadbalancers \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "loadbalancer": {
-      "name": "lb-prod", "vpc_id": "{VPC_ID}",
-      "vip_subnet_cidr_id": "{SUBNET_ID}",
-      "availability_zone_list": ["{AZ}"],
-      "guaranteed": false
-    }
-  }'
-# guaranteed=false = shared type (free tier); true = dedicated type (requires l4_flavor_id or l7_flavor_id)
-# Returns loadbalancer.id
-
-# Step 2: Create listener
-curl -s -X POST https://elb.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/elb/listeners \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "listener": {
-      "name": "listener-http-80", "loadbalancer_id": "{LB_ID}",
-      "protocol": "HTTP", "protocol_port": 80
-    }
-  }'
-# protocol options: TCP / UDP / HTTP / HTTPS / TERMINATED_HTTPS
-# Returns listener.id
-
-# Step 3: Create backend server group
-curl -s -X POST https://elb.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/elb/pools \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "pool": {
-      "name": "pool-app", "protocol": "HTTP",
-      "lb_algorithm": "ROUND_ROBIN", "listener_id": "{LISTENER_ID}"
-    }
-  }'
-# lb_algorithm: ROUND_ROBIN / LEAST_CONNECTIONS / SOURCE_IP
-# Returns pool.id
-
-# Step 4: Add ECS nodes as backend servers
-curl -s -X POST https://elb.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/elb/pools/{POOL_ID}/members \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "member": {
-      "name": "member-ecs-01", "address": "{ECS_PRIVATE_IP}",
-      "protocol_port": 8080, "subnet_cidr_id": "{SUBNET_ID}",
-      "weight": 1
-    }
-  }'
-# address = ECS private IP; protocol_port = actual app listening port (not LB listener port)
-
-# Step 5: Configure health check
-curl -s -X POST https://elb.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/elb/healthmonitors \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "healthmonitor": {
-      "pool_id": "{POOL_ID}", "type": "HTTP",
-      "monitor_port": 8080, "url_path": "/health",
-      "delay": 5, "timeout": 3, "max_retries": 3
-    }
-  }'
-# type: TCP / HTTP / HTTPS; url_path only valid for HTTP/HTTPS
-
-# Step 6: Bind EIP to ELB (via the port associated with LB vip_address)
-# First query LB vip_port_id, then bind EIP
-curl -s "https://elb.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/elb/loadbalancers/{LB_ID}" \
-  -H "X-Auth-Token: {TOKEN}"
-# Get loadbalancer.vip_port_id, then use EIP bind API with this port_id
-```
-
----
-
-## 8. RDS Database
-
-```bash
-# Create MySQL 8.0 primary/standby instance
-curl -s -X POST https://rds.{REGION}.myhuaweicloud.com/v3/{PROJECT_ID}/instances \
-  -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{
-    "name": "rds-prod", "datastore": {"type": "MySQL", "version": "8.0"},
-    "ha": {"mode": "Ha", "replication_mode": "semisync"},
-    "password": "{ADMIN_PASSWORD}",
-    # ⚠️ SECURITY: Replace {ADMIN_PASSWORD} with a strong password from your secrets manager.
-    # Never commit real passwords to version control.
-    "flavor_ref": "rds.mysql.c2.large.ha",
-    "volume": {"type": "ULTRAHIGH", "size": 100},
-    "region": "{REGION}", "availability_zone": "{AZ1},{AZ2}",
-    "vpc_id": "{VPC_ID}", "subnet_id": "{SUBNET_ID}",
-    "security_group": {"id": "{RDS_SG_ID}"}
-  }'
-
-# Other common operations (all under /v3/{PROJECT_ID}/...):
-# List instances:          GET /instances
-# Create manual backup:    POST /backups
-# PITR restore:            POST /instances (source.type=timestamp)
-# Create account:          POST /instances/{id}/db_user
-# Query slow logs:         GET /instances/{id}/slowlog
-# Modify parameters:       PUT /instances/{id}/configurations
-```
-
-See `references/rds-api.md` for details.
-
----
-
-## 9. End-to-End Scenario: 3-Node Web App + MySQL from Scratch
-
-**Target architecture**:
-```
-Internet → EIP → ELB(HTTP:80) → app-01(8080)
-                              → app-02(8080)  → RDS MySQL 8.0 (primary/standby)
-                              → app-03(8080)
-```
-
-All operations depend on TOKEN, REGION, PROJECT_ID. Assumes VPC and subnet already exist.
-
-### Phase 1: Security Groups
-
-```bash
-# 1a. Create Web tier security group (for ECS)
-SG_WEB=$(curl -s -X POST https://vpc.${REGION}.myhuaweicloud.com/v2.0/security-groups \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d '{"security_group":{"name":"sg-web","description":"Web ECS"}}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['security_group']['id'])")
-
-# 1b. Create DB tier security group (for RDS)
-SG_DB=$(curl -s -X POST https://vpc.${REGION}.myhuaweicloud.com/v2.0/security-groups \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d '{"security_group":{"name":"sg-db","description":"RDS MySQL"}}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['security_group']['id'])")
-
-# 1c. sg-web: open SSH(22), app port(8080), ELB health check (100.125.0.0/16)
-for PORT in 22 8080; do
-  curl -s -X POST https://vpc.${REGION}.myhuaweicloud.com/v2.0/security-group-rules \
-    -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-    -d "{\"security_group_rule\":{\"security_group_id\":\"${SG_WEB}\",\"direction\":\"ingress\",
-         \"protocol\":\"tcp\",\"port_range_min\":${PORT},\"port_range_max\":${PORT},
-         \"remote_ip_prefix\":\"0.0.0.0/0\"}}"
-done
-
-# 1d. sg-db: allow only sg-web to reach MySQL 3306 (security group mutual access)
-curl -s -X POST https://vpc.${REGION}.myhuaweicloud.com/v2.0/security-group-rules \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"security_group_rule\":{\"security_group_id\":\"${SG_DB}\",\"direction\":\"ingress\",
-       \"protocol\":\"tcp\",\"port_range_min\":3306,\"port_range_max\":3306,
-       \"remote_group_id\":\"${SG_WEB}\"}}"
-```
-
-### Phase 2: Create 3 ECS Instances
-
-```bash
-# Loop to create app-01 / app-02 / app-03
-for i in 01 02 03; do
-  JOB=$(curl -s -X POST https://ecs.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/cloudservers \
-    -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-    -d "{
-      \"server\": {
-        \"name\": \"app-${i}\", \"imageRef\": \"${IMAGE_ID}\",
-        \"flavorRef\": \"s6.large.2\",
-        \"availability_zone\": \"${AZ}\", \"vpcid\": \"${VPC_ID}\",
-        \"nics\": [{\"subnet_id\": \"${SUBNET_ID}\"}],
-        \"security_groups\": [{\"id\": \"${SG_WEB}\"}],
-        \"root_volume\": {\"volumetype\": \"SSD\", \"size\": 50},
-        \"adminPass\": \"${PASSWORD}\"
-      }
-    }" | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
-  echo "app-${i} job_id=${JOB}"
-  # Poll until SUCCESS
-  while true; do
-    STATUS=$(curl -s "https://ecs.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/jobs/${JOB}" \
-      -H "X-Auth-Token: ${TOKEN}" | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
-    [ "$STATUS" = "SUCCESS" ] && break
-    echo "  waiting... $STATUS"; sleep 10
-  done
-done
-```
-
-### Phase 3: Apply for EIP + Shared Bandwidth
-
-```bash
-# 3a. Create shared bandwidth (50 Mbps, shared across EIPs)
-BW_ID=$(curl -s -X POST https://vpc.${REGION}.myhuaweicloud.com/v2.0/${PROJECT_ID}/bandwidths \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d '{"bandwidth":{"name":"shared-bw-prod","size":50}}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['bandwidth']['id'])")
-
-# 3b. Apply for EIP (to be bound to ELB; using dedicated for now)
-EIP_ID=$(curl -s -X POST https://vpc.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/publicips \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d '{"publicip":{"type":"5_bgp"},"bandwidth":{"name":"bw-elb","size":50,"share_type":"PER","charge_mode":"bandwidth"}}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['publicip']['id'])")
-```
-
-### Phase 4: Create RDS MySQL Primary/Standby Instance
-
-```bash
-RDS_JOB=$(curl -s -X POST https://rds.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/instances \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{
-    \"name\": \"rds-prod\",
-    \"datastore\": {\"type\": \"MySQL\", \"version\": \"8.0\"},
-    \"ha\": {\"mode\": \"Ha\", \"replication_mode\": \"semisync\"},
-    \"password\": \"${DB_ADMIN_PASS}\",
-    # ⚠️ SECURITY: Set DB_ADMIN_PASS env var. Use a secrets manager in production.
-    \"flavor_ref\": \"rds.mysql.c2.large.ha\",
-    \"volume\": {\"type\": \"ULTRAHIGH\", \"size\": 100},
-    \"region\": \"${REGION}\",
-    \"availability_zone\": \"${AZ1},${AZ2}\",
-    \"vpc_id\": \"${VPC_ID}\",
-    \"subnet_id\": \"${SUBNET_ID}\",
-    \"security_group\": {\"id\": \"${SG_DB}\"}
-  }" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['instance']['id'])")
-echo "RDS instance_id=${RDS_JOB}"
-
-# Wait for RDS to become available (poll ~5-10 min)
-while true; do
-  S=$(curl -s "https://rds.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/instances/${RDS_JOB}" \
-    -H "X-Auth-Token: ${TOKEN}" | python3 -c "import sys,json; print(json.load(sys.stdin)['instance']['status'])")
-  [ "$S" = "available" ] && break
-  echo "  RDS status=$S, waiting..."; sleep 30
-done
-
-# Create application database account
-curl -s -X POST https://rds.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/instances/${RDS_JOB}/db_user \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"name\":\"appuser\",\"password\":\"${DB_USER_PASS}\",
-        # ⚠️ SECURITY: Set DB_USER_PASS env var. Never hardcode database passwords.
-        \"databases\":[{\"name\":\"appdb\",\"readonly\":false}]}"
-```
-
-### Phase 5: ELB Configuration (Full Flow)
-
-```bash
-# 5a. Create load balancer
-LB_ID=$(curl -s -X POST https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/loadbalancers \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"loadbalancer\":{\"name\":\"lb-prod\",\"vpc_id\":\"${VPC_ID}\",
-       \"vip_subnet_cidr_id\":\"${SUBNET_ID}\",
-       \"availability_zone_list\":[\"${AZ1}\"],\"guaranteed\":false}}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['loadbalancer']['id'])")
-
-# 5b. Create HTTP listener (port 80)
-LISTENER_ID=$(curl -s -X POST https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/listeners \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"listener\":{\"name\":\"listener-http-80\",\"loadbalancer_id\":\"${LB_ID}\",
-       \"protocol\":\"HTTP\",\"protocol_port\":80}}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['listener']['id'])")
-
-# 5c. Create backend server group (round-robin)
-POOL_ID=$(curl -s -X POST https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/pools \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"pool\":{\"name\":\"pool-app\",\"protocol\":\"HTTP\",
-       \"lb_algorithm\":\"ROUND_ROBIN\",\"listener_id\":\"${LISTENER_ID}\"}}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['pool']['id'])")
-
-# 5d. Add 3 ECS instances to backend (replace ECS_IP_01/02/03 with actual private IPs)
-for ECS_IP in ${ECS_IP_01} ${ECS_IP_02} ${ECS_IP_03}; do
-  curl -s -X POST https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/pools/${POOL_ID}/members \
-    -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-    -d "{\"member\":{\"address\":\"${ECS_IP}\",\"protocol_port\":8080,
-         \"subnet_cidr_id\":\"${SUBNET_ID}\",\"weight\":1}}"
-done
-
-# 5e. Configure health check (HTTP GET /health)
-curl -s -X POST https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/healthmonitors \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"healthmonitor\":{\"pool_id\":\"${POOL_ID}\",\"type\":\"HTTP\",
-       \"monitor_port\":8080,\"url_path\":\"/health\",
-       \"delay\":5,\"timeout\":3,\"max_retries\":3}}"
-
-# 5f. Get ELB VIP port_id, then bind EIP
-VIP_PORT=$(curl -s "https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/loadbalancers/${LB_ID}" \
-  -H "X-Auth-Token: ${TOKEN}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['loadbalancer']['vip_port_id'])")
-
-curl -s -X PUT https://vpc.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/publicips/${EIP_ID} \
-  -H "Content-Type: application/json" -H "X-Auth-Token: ${TOKEN}" \
-  -d "{\"publicip\":{\"port_id\":\"${VIP_PORT}\"}}"
-```
-
-### Phase 6: Deploy Application + Configure Database Connection
-
-```bash
-# Run on each ECS (app-01 shown as example, via SSH)
-ssh root@${ECS_IP_01} << 'EOF'
-# Download application package from OBS
-./obsutil cp obs://my-bucket/releases/app-v1.0.tar.gz /opt/app/ -i=${AK} -k=${SK}
-# ⚠️ SECURITY: Set AK and SK env vars. Never hardcode access keys.
-
-# Extract and deploy
-tar -xzf /opt/app/app-v1.0.tar.gz -C /opt/app/
-cat > /opt/app/config.env << CONF
-DB_HOST=${RDS_PRIVATE_IP}
-DB_PORT=3306
-DB_NAME=appdb
-DB_USER=appuser
-DB_PASS=${DB_USER_PASS}
-# ⚠️ SECURITY: Set DB_USER_PASS env var. Never hardcode credentials in config files.
-APP_PORT=8080
-CONF
-
-# Start app (example: Java)
-nohup java -jar /opt/app/app.jar --spring.config.location=/opt/app/config.env > /var/log/app.log 2>&1 &
-echo "App started, PID=$!"
-EOF
-```
-
-### Validation Checklist
-
-```bash
-# 1. Check ELB backend node health (expect ONLINE)
-curl -s "https://elb.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/elb/pools/${POOL_ID}/members" \
-  -H "X-Auth-Token: ${TOKEN}" | python3 -c \
-  "import sys,json; [print(m['address'], m['operating_status']) for m in json.load(sys.stdin)['members']]"
-
-# 2. Access application via EIP
-curl -I http://${EIP_ADDRESS}/health
-# Expected: HTTP/1.1 200 OK
-
-# 3. Verify RDS connectivity (run on any ECS)
-mysql -h ${RDS_PRIVATE_IP} -P 3306 -u appuser -p${DB_USER_PASS} appdb -e "SELECT 1;"
-# ⚠️ SECURITY: Use environment variables for all credentials. Never hardcode passwords.
-```
-
----
-
-## GitHub Repository
-
-This skill is hosted at: **https://github.com/seagaruda/Huawei-Cloud-Deployment-Agent-Skill**
-
-Files in the repo:
-- `SKILL.md` — main skill body (English)
-- `references/rds-api.md` — RDS v3 API quick reference
 
 ## Common Pitfalls
 
-1. **Context saturation silently truncates large write_file/execute_code content**: After a session accumulates large tool outputs (parallel web fetches, multi-read loops), the `content` parameter of `write_file` and `execute_code` is dropped silently, causing writes to fail with "missing required field 'content'". Signals: tool returns the error immediately with no content written, retrying produces the same error.
-   - **For write + push**: delegate the entire "write file + git commit + push" to a `delegate_task` subagent with fresh context. Pass the full content via the `goal` string.
-   - **For large translation (>400 lines)**: do NOT use a subagent — translation of 500+ lines times out at 600s. Instead, start a **new chat session** and do the translation there.
-   - **Splitting strategy**: commit small files first (README, references), then handle the large SKILL.md in a separate session.
+1. **EIP binding requires port_id, not server_id**: Get it from `OS-EXT-IPS:port_id` in the ECS details `addresses` field.
 
-2. **EIP binding requires port_id, not server_id**: When binding an EIP, provide the ECS NIC's `port_id`, not the server ID. Get it from `OS-EXT-IPS:port_id` in the ECS details `addresses` field.
+2. **ELB backend address is ECS private IP; port is the app port**: `member.address` = ECS private IP, `protocol_port` = actual app listening port (e.g. 8080), not the LB listener port (80).
 
-3. **ELB backend address is ECS private IP; port is the app port**: `member.address` = ECS private IP, `protocol_port` = actual app listening port (e.g. 8080), not the LB listener port (80).
+3. **Removing EIP from shared bandwidth requires specifying new dedicated bandwidth size**: `size` and `charge_mode` are required fields on removal.
 
-4. **Removing EIP from shared bandwidth requires specifying new dedicated bandwidth size**: `size` and `charge_mode` are required fields on removal — they define the EIP's standalone config after leaving the shared pool.
+4. **OBS does not use IAM Token**: OBS uses AK/SK signing (HMAC-SHA1), not the token used by other services. Use `obsutil` CLI.
 
-5. **OBS does not use IAM Token**: OBS uses AK/SK signing (HMAC-SHA1), not the token used by other services. Use `obsutil` CLI rather than hand-crafting signatures.
+5. **ECS creation returns job_id, not server_id directly**: Must poll `GET /v1/{PROJECT_ID}/jobs/{JOB_ID}` until `status=SUCCESS`, then read `entities.server_id`.
 
-6. **ECS creation returns job_id, not server_id directly**: Must poll `GET /v1/{PROJECT_ID}/jobs/{JOB_ID}` until `status=SUCCESS`, then read `entities.server_id`.
+6. **RDS and ECS must be in the same VPC**: Cross-VPC RDS access requires a VPC peering connection first.
 
-7. **RDS and ECS must be in the same VPC**: Cross-VPC RDS access requires a VPC peering connection first — not a direct connection.
+7. **Bind EIP to ELB via vip_port_id**: ELB has no direct "bind EIP" API. Query LB details to get `vip_port_id`, then use the EIP binding API.
 
-8. **Bind EIP to ELB via vip_port_id**: ELB has no direct "bind EIP" API. Query LB details to get `vip_port_id`, then use the EIP binding API to attach that port.
-
-9. **Git push conflict after concurrent remote edits**: If `git pull --rebase` produces a conflict on files where local is canonical, abort and use `git merge -X ours origin/main` instead to keep the local version, then push.
-   ```bash
-   git rebase --abort
-   git fetch origin main
-   git merge -X ours origin/main --no-edit
-    GH_CONFIG_DIR=${HOME}/.config/gh git push origin main
-   ```
+---
 
 ## Verification Checklist
 
@@ -615,3 +110,9 @@ Files in the repo:
 - [ ] ECS creation: poll job_id until SUCCESS before reading server_id
 - [ ] OBS upload uses AK/SK, not IAM Token
 - [ ] EIP binding uses port_id, not server_id
+
+---
+
+## GitHub Repository
+
+This skill is hosted at: **https://github.com/seagaruda/Huawei-Cloud-Deployment-Agent-Skill**

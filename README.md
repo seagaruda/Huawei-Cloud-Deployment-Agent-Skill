@@ -1,6 +1,6 @@
 # Huawei Cloud Deployment Agent Skill
 
-A complete Huawei Cloud deployment skill file for all AI platforms, enabling any AI Agent to handle full-stack cloud deployments — from basic networking to databases — using natural language.
+A complete Huawei Cloud deployment skill for all AI platforms, enabling any AI Agent to handle full-stack cloud deployments — from basic networking to databases — using natural language.
 
 ## Features Covered
 
@@ -19,6 +19,35 @@ A complete Huawei Cloud deployment skill file for all AI platforms, enabling any
 Supported Huawei Cloud regions: `cn-north-4`, `cn-east-3`, `cn-south-1`, and all other commercial regions  
 API versions: ECS v1, VPC v2.0, ELB v3, RDS v3, OBS v1
 
+## File Structure
+
+```
+Huawei-Cloud-Deployment-Agent-Skill/
+├── SKILL.md                          # Main entry (overview + module index)
+├── modules/                          # Modular skill files (load by intent)
+│   ├── 01-security-groups.md         # Security groups & rules
+│   ├── 02-ecs.md                     # ECS cloud servers
+│   ├── 03-eip.md                     # Elastic Public IP
+│   ├── 04-bandwidth.md               # Shared bandwidth packages
+│   ├── 05-obs.md                     # OBS object storage
+│   ├── 06-ecs-rds.md                 # ECS ↔ RDS connectivity
+│   ├── 07-elb.md                     # ELB load balancing
+│   ├── 08-rds.md                     # RDS database management
+│   └── 09-end-to-end.md             # Full deployment scenario
+├── references/
+│   └── rds-api.md                    # RDS v3 API quick reference
+├── scripts/                          # CI validation scripts
+│   ├── validate_api_commands.py      # Validate JSON in curl payloads
+│   ├── validate_links.py            # Check internal cross-references
+│   ├── check_secrets.py             # Detect hardcoded secrets
+│   ├── extract_endpoints.py          # Extract API endpoint patterns
+│   └── validate_endpoints.py         # Verify endpoint URL formats
+├── .github/workflows/
+│   └── validate.yml                  # GitHub Actions CI pipeline
+├── LICENSE                           # Apache License 2.0
+└── README.md                        # This file
+```
+
 ## Supported AI Platforms
 
 | Platform | Usage |
@@ -30,6 +59,16 @@ API versions: ECS v1, VPC v2.0, ELB v3, RDS v3, OBS v1
 | **Dify / FastGPT / Coze** | Import as system prompt or knowledge base document |
 | **Hermes Agent** | Place at `~/.hermes/skills/devops/huaweicloud-deploy/SKILL.md` |
 | **Any Platform** | Paste the full `SKILL.md` content as the System Prompt |
+
+## CI/CD Pipeline
+
+This repository includes a GitHub Actions workflow (`.github/workflows/validate.yml`) that:
+
+- **Validates JSON syntax** in all curl command payloads
+- **Checks internal cross-references** between SKILL.md and module files
+- **Scans for hardcoded secrets** (passwords, tokens, AK/SK)
+- **Extracts and validates API endpoint patterns**
+- **Runs weekly** (Monday 02:00 UTC) to catch API changes
 
 ## Quick Start
 
@@ -46,7 +85,7 @@ API versions: ECS v1, VPC v2.0, ELB v3, RDS v3, OBS v1
 ```bash
 mkdir -p .cursor/rules
 curl -o .cursor/rules/huaweicloud-deploy.mdc \
-  https://raw.githubusercontent.com/seagaruda/huaweicloud-rds-skill/main/SKILL.md
+  https://raw.githubusercontent.com/seagaruda/Huawei-Cloud-Deployment-Agent-Skill/main/SKILL.md
 ```
 
 ### Hermes Agent
@@ -54,11 +93,13 @@ curl -o .cursor/rules/huaweicloud-deploy.mdc \
 ```bash
 mkdir -p ~/.hermes/skills/devops/huaweicloud-deploy
 curl -o ~/.hermes/skills/devops/huaweicloud-deploy/SKILL.md \
-  https://raw.githubusercontent.com/seagaruda/huaweicloud-rds-skill/main/SKILL.md
-# Optional: sync RDS API reference
-mkdir -p ~/.hermes/skills/devops/huaweicloud-deploy/references
-curl -o ~/.hermes/skills/devops/huaweicloud-deploy/references/rds-api.md \
-  https://raw.githubusercontent.com/seagaruda/huaweicloud-rds-skill/main/references/rds-api.md
+  https://raw.githubusercontent.com/seagaruda/Huawei-Cloud-Deployment-Agent-Skill/main/SKILL.md
+# Optional: sync module files
+mkdir -p ~/.hermes/skills/devops/huaweicloud-deploy/modules
+for f in 01-security-groups 02-ecs 03-eip 04-bandwidth 05-obs 06-ecs-rds 07-elb 08-rds 09-end-to-end; do
+  curl -o ~/.hermes/skills/devops/huaweicloud-deploy/modules/${f}.md \
+    https://raw.githubusercontent.com/seagaruda/Huawei-Cloud-Deployment-Agent-Skill/main/modules/${f}.md
+done
 ```
 
 ## Conversation Examples
@@ -75,15 +116,6 @@ User: Check my slow SQL queries — recent queries have been running slow
 User: Deploy a 3-node web app with MySQL from scratch and give me the complete script
 ```
 
-## File Structure
-
-```
-huaweicloud-rds-skill/
-├── SKILL.md                  # Main skill document (used directly as AI prompt)
-└── references/
-    └── rds-api.md            # RDS v3 API quick reference table
-```
-
 ## Official Documentation
 
 - [ECS API Reference](https://support.huaweicloud.com/api-ecs/zh-cn_topic_0020212668.html)
@@ -91,3 +123,7 @@ huaweicloud-rds-skill/
 - [ELB API Reference](https://support.huaweicloud.com/api-elb/elb_jd_0001.html)
 - [RDS API Reference](https://support.huaweicloud.com/api-rds/rds_01_0001.html)
 - [OBS API Reference](https://support.huaweicloud.com/api-obs/obs_04_0001.html)
+
+## License
+
+Apache License 2.0 — See [LICENSE](LICENSE) for details.

@@ -1,0 +1,60 @@
+name: Validate API Commands
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday 02:00 UTC to catch API changes
+    - cron: '0 2 * * 1'
+
+jobs:
+  validate-curl-commands:
+    name: Validate curl command syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install jsonschema
+
+      - name: Extract and validate curl commands
+        run: |
+          python3 scripts/validate_api_commands.py
+
+      - name: Check markdown link validity
+        run: |
+          # Check that all internal module references exist
+          python3 scripts/validate_links.py
+
+      - name: Check for hardcoded credentials
+        run: |
+          python3 scripts/check_secrets.py
+
+  api-endpoint-check:
+    name: Verify API endpoints are reachable
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Extract API endpoints
+        run: |
+          python3 scripts/extract_endpoints.py
+
+      - name: Verify endpoint format
+        run: |
+          python3 scripts/validate_endpoints.py
