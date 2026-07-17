@@ -127,3 +127,6 @@ User: Deploy a 3-node web app with MySQL from scratch and give me the complete s
 ## License
 
 Apache License 2.0 — See [LICENSE](LICENSE) for details.
+
+## Contact
+www.seagaruda.com
