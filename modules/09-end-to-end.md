@@ -73,6 +73,7 @@ for i in 01 02 03; do
     STATUS=$(curl -s "https://ecs.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/jobs/${JOB}" \
       -H "X-Auth-Token: ${TOKEN}" | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
     [ "$STATUS" = "SUCCESS" ] && break
+    [ "$STATUS" = "FAIL" ] && { echo "Job failed"; exit 1; }
     echo "  waiting... $STATUS"; sleep 10
   done
 done
@@ -123,6 +124,7 @@ while true; do
   S=$(curl -s "https://rds.${REGION}.myhuaweicloud.com/v3/${PROJECT_ID}/instances/${RDS_ID}" \
     -H "X-Auth-Token: ${TOKEN}" | python3 -c "import sys,json; print(json.load(sys.stdin)['instance']['status'])")
   [ "$S" = "available" ] && break
+  [ "$S" = "error" ] || [ "$S" = "failed" ] && { echo "RDS failed: $S"; exit 1; }
   echo "  RDS status=$S, waiting..."; sleep 30
 done
 
@@ -191,7 +193,7 @@ curl -s -X PUT https://vpc.${REGION}.myhuaweicloud.com/v1/${PROJECT_ID}/publicip
 
 ```bash
 # Run on each ECS (app-01 shown as example, via SSH)
-ssh root@${ECS_IP_01} << 'EOF'
+ssh root@${ECS_IP_01} << EOF
 # Download application package from OBS
 ./obsutil cp obs://my-bucket/releases/app-v1.0.tar.gz /opt/app/ -i=${AK} -k=${SK}
 

@@ -4,7 +4,7 @@ Create buckets and upload/download objects. OBS uses AK/SK signing, NOT IAM Toke
 
 ## Authentication
 
-OBS uses **AK/SK** (Access Key / Secret Key) with HMAC-SHA1 signing. Create an access key in the Huawei Cloud console first.
+OBS uses **AK/SK** (Access Key / Secret Key) with HMAC-SHA256 signing. Create an access key in the Huawei Cloud console first.
 
 > **⚠️ SECURITY**: Store AK/SK in environment variables. Never hardcode.
 

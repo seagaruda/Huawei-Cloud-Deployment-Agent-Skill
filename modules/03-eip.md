@@ -52,5 +52,5 @@ curl -s -X PUT https://vpc.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/publicips/
 curl -s -X POST \
   https://vpc.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/publicips/{EIP_ID}/action \
   -H "Content-Type: application/json" -H "X-Auth-Token: {TOKEN}" \
-  -d '{"publicip": {"port_id": null}}'
+  -d '{"publicip": {"port_id": ""}}'
 ```

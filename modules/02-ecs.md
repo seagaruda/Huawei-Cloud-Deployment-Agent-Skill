@@ -41,6 +41,7 @@ while true; do
   STATUS=$(curl -s "https://ecs.{REGION}.myhuaweicloud.com/v1/{PROJECT_ID}/jobs/{JOB_ID}" \
     -H "X-Auth-Token: {TOKEN}" | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
   [ "$STATUS" = "SUCCESS" ] && break
+  [ "$STATUS" = "FAIL" ] && { echo "Job failed"; exit 1; }
   echo "waiting... $STATUS"; sleep 10
 done
 # Then read entities.server_id from the job response

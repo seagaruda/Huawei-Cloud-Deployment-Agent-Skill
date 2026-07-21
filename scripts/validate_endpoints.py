@@ -16,19 +16,27 @@ def validate_endpoints():
 
     issues = []
     valid_services = ['vpc', 'ecs', 'elb', 'rds', 'obs', 'iam', 'cce', 'evs', 'vbs']
-    
+
     for ep in endpoints:
         # Check basic URL structure
-        m = re.match(r'https://\*\.(\{?\w+\}?)\.myhuaweicloud\.com(/[^\s]*)?', ep)
+        m = re.match(r'https://([\w\{\}.-]+)\.(\{?\w+\}?)\.myhuaweicloud\.com(/[^\s]*)?', ep)
         if not m:
             issues.append(f"Invalid URL format: {ep}")
             continue
-        
-        region = m.group(1)
-        path = m.group(2) or ""
-        
-        # Check API version in path
-        if path and not re.search(r'/v[0-9]+(?:\.[0-9]+)?/', path):
+
+        subdomain = m.group(1)
+        region = m.group(2)
+        path = m.group(3) or ""
+
+        # Extract base service: last dot-segment of subdomain (handles virtual-hosted like bucket.obs)
+        service_raw = subdomain.split('.')[-1]
+        service = re.sub(r'[{}\-]', '', service_raw).lower()
+        if service and not re.match(r'^\{', subdomain) and service not in valid_services:
+            issues.append(f"Unknown service '{service}': {ep}")
+
+        # Check API version in path (OBS virtual-hosted URLs don't use /vX/ versioning)
+        is_obs = re.search(r'\.obs\.', ep)
+        if path and not is_obs and not re.search(r'/v[0-9]+(?:\.[0-9]+)?/', path):
             issues.append(f"Missing API version in path: {ep}")
     
     if issues:

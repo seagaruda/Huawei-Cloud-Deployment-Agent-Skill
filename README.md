@@ -35,7 +35,13 @@ Huawei-Cloud-Deployment-Agent-Skill/
 │   ├── 08-rds.md                     # RDS database management
 │   └── 09-end-to-end.md             # Full deployment scenario
 ├── references/
-│   └── rds-api.md                    # RDS v3 API quick reference
+│   ├── bandwidth-api.md              # Bandwidth v2.0 API quick reference
+│   ├── ecs-api.md                    # ECS v1 API quick reference
+│   ├── eip-api.md                    # EIP v1 API quick reference
+│   ├── elb-api.md                    # ELB v3 API quick reference
+│   ├── obs-api.md                    # OBS v1 API quick reference
+│   ├── rds-api.md                    # RDS v3 API quick reference
+│   └── vpc-security-groups-api.md    # VPC security groups v2.0 API quick reference
 ├── scripts/                          # CI validation scripts
 │   ├── validate_api_commands.py      # Validate JSON in curl payloads
 │   ├── validate_links.py            # Check internal cross-references

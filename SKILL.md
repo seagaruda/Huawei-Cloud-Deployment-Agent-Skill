@@ -28,8 +28,8 @@ export PROJECT_ID="your-project-id"
 export PASSWORD="your-ecs-password"
 export DB_ADMIN_PASS="your-rds-admin-password"
 export DB_USER_PASS="your-app-db-password"
-export AK="your-access-key"
-export SK="your-secret-key"
+export AK="${YOUR_ACCESS_KEY}"
+export SK="${YOUR_SECRET_KEY}"
 ```
 
 ## Prerequisite Variables
@@ -79,7 +79,14 @@ Each module is a standalone file. Load the relevant module(s) based on user inte
 | 8 | RDS | [`modules/08-rds.md`](modules/08-rds.md) | Create instances, backup/restore, accounts, slow logs, parameters |
 | 9 | End-to-End | [`modules/09-end-to-end.md`](modules/09-end-to-end.md) | Complete 3-node Web app + MySQL deployment script |
 
-See `references/rds-api.md` for the RDS v3 API quick reference table.
+See `references/` for API quick reference tables:
+- `bandwidth-api.md` — Bandwidth v2.0
+- `ecs-api.md` — ECS v1
+- `eip-api.md` — EIP v1
+- `elb-api.md` — ELB v3
+- `obs-api.md` — OBS v1
+- `rds-api.md` — RDS v3
+- `vpc-security-groups-api.md` — VPC security groups v2.0
 
 ---
 
@@ -91,7 +98,7 @@ See `references/rds-api.md` for the RDS v3 API quick reference table.
 
 3. **Removing EIP from shared bandwidth requires specifying new dedicated bandwidth size**: `size` and `charge_mode` are required fields on removal.
 
-4. **OBS does not use IAM Token**: OBS uses AK/SK signing (HMAC-SHA1), not the token used by other services. Use `obsutil` CLI.
+4. **OBS does not use IAM Token**: OBS uses AK/SK signing (HMAC-SHA256), not the token used by other services. Use `obsutil` CLI.
 
 5. **ECS creation returns job_id, not server_id directly**: Must poll `GET /v1/{PROJECT_ID}/jobs/{JOB_ID}` until `status=SUCCESS`, then read `entities.server_id`.
 

@@ -10,10 +10,10 @@ import glob
 def check_secrets():
     issues = []
     patterns = [
-        (r'password["\']?\s*[:=]\s*["\'][^$\{]["\']', "Hardcoded password detected"),
-        (r'adminPass["\']?\s*[:=]\s*["\'][^$\{]["\']', "Hardcoded adminPass detected"),
-        (r'AK["\']?\s*[:=]\s*["\'][^$\{]["\']', "Hardcoded AK detected"),
-        (r'SK["\']?\s*[:=]\s*["\'][^$\{]["\']', "Hardcoded SK detected"),
+        (r'password["\']?\s*[:=]\s*["\']([^"\'\n]{2,})["\']', "Hardcoded password detected"),
+        (r'adminPass["\']?\s*[:=]\s*["\']([^"\'\n]{2,})["\']', "Hardcoded adminPass detected"),
+        (r'AK["\']?\s*[:=]\s*["\']([^"\'\n]{2,})["\']', "Hardcoded AK detected"),
+        (r'SK["\']?\s*[:=]\s*["\']([^"\'\n]{2,})["\']', "Hardcoded SK detected"),
         (r'ghp_[A-Za-z0-9]{36}', "GitHub token detected"),
         (r'X-Auth-Token:\s*[A-Za-z0-9]{20,}', "Hardcoded auth token detected"),
     ]
@@ -31,10 +31,13 @@ def check_secrets():
                         # string rather than the whole line, because a line
                         # may legitimately contain both a JSON object literal
                         # (with '{') and a hardcoded secret.
-                        matched = m.group(0)
-                        # Extract the value portion after : or =
-                        val_match = re.search(r'[:=]\s*["\']([^"\']*)["\']', matched)
-                        val = val_match.group(1) if val_match else ""
+                        # Use group(1) if available (patterns with capture group), else fall back
+                        try:
+                            val = m.group(1)
+                        except IndexError:
+                            matched = m.group(0)
+                            val_match = re.search(r'[:=]\s*["\']([^"\']*)["\']', matched)
+                            val = val_match.group(1) if val_match else ""
                         if re.match(r'^\$\{[^}]+\}$', val) or re.match(r'^\{[^}]+\}$', val):
                             continue
                         issues.append(f"  {filepath}:{line_num}: {msg}")

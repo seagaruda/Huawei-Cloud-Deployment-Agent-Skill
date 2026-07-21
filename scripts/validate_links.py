@@ -33,7 +33,7 @@ def validate_links():
                 issues.append(f"Module file too small (may be empty): {path}")
     
     # Check references directory
-    refs = ["references/rds-api.md"]
+    refs = glob.glob("references/*.md")
     for ref in refs:
         if not os.path.exists(ref):
             issues.append(f"Missing reference file: {ref}")

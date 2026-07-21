@@ -15,9 +15,9 @@ def extract_endpoints():
             content = f.read()
         
         # Find all Huawei Cloud API URLs
-        urls = re.findall(r'https://[a-z]+\.(\{?\w+\}?)\.myhuaweicloud\.com(/[^\s\'"]+)?', content)
-        for domain, path in urls:
-            endpoint = f"https://*.{domain}.myhuaweicloud.com{path or ''}"
+        urls = re.findall(r'https://([\w\{\}.-]+)\.(\{?\w+\}?)\.myhuaweicloud\.com(/[^\s\'"]+)?', content)
+        for subdomain, domain, path in urls:
+            endpoint = f"https://{subdomain}.{domain}.myhuaweicloud.com{path or ''}"
             endpoints.add(endpoint)
     
     print(f"Found {len(endpoints)} unique API endpoint patterns:")
